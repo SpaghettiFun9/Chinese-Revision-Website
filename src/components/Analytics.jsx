@@ -1,4 +1,27 @@
+import { useEffect, useState } from 'react'
 import { ToneText, TonePinyin } from './ToneText.jsx'
+
+// Ease a number from 0 → target over `duration` ms (cubic ease-out).
+function useCountUp(target, duration = 800) {
+  const [val, setVal] = useState(target == null ? null : 0)
+  useEffect(() => {
+    if (target == null) {
+      setVal(null)
+      return
+    }
+    let raf
+    const start = performance.now()
+    const tick = (now) => {
+      const p = Math.min(1, (now - start) / duration)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setVal(Math.round(target * eased))
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [target, duration])
+  return val
+}
 
 export default function Analytics({ summary, onHome }) {
   const { mode, results } = summary
@@ -8,6 +31,7 @@ export default function Analytics({ summary, onHome }) {
   const accuracy = total ? Math.round((correct / total) * 100) : null
   const toReview = graded.filter((r) => !r.correct)
   const ungraded = results.filter((r) => r.correct === null)
+  const shownAccuracy = useCountUp(accuracy)
 
   const accentColor =
     accuracy === null ? 'text-slate-700'
@@ -31,7 +55,7 @@ export default function Analytics({ summary, onHome }) {
           </div>
           {accuracy !== null ? (
             <>
-              <div className="mt-2 text-6xl font-bold tabular-nums">{accuracy}%</div>
+              <div className="mt-2 text-6xl font-bold tabular-nums">{shownAccuracy}%</div>
               <div className="mt-1 text-white/80">
                 {correct} / {total} correct
               </div>
@@ -57,7 +81,11 @@ export default function Analytics({ summary, onHome }) {
           </h3>
           <ul className="divide-y divide-slate-100">
             {toReview.map((r, i) => (
-              <li key={i} className="flex items-center justify-between gap-3 py-2.5">
+              <li
+                key={i}
+                className="animate-slide-up flex items-center justify-between gap-3 py-2.5"
+                style={{ animationDelay: `${Math.min(i * 50, 400)}ms` }}
+              >
                 <div className="min-w-0">
                   <ToneText hanzi={r.word.hanzi} pinyin={r.word.pinyin} className="text-2xl font-semibold" />{' '}
                   <TonePinyin pinyin={r.word.pinyin} className="text-sm" />

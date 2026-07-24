@@ -35,7 +35,7 @@ function seedState() {
     settings: {
       dictation: { interval: 8, repeats: 2, rate: 0.9, voiceURI: '' },
       showPinyinHint: false,
-      ai: { apiKey: '', model: 'claude-opus-4-8' },
+      ai: { apiKey: '', model: 'gemini-2.5-flash' },
     },
   }
 }
@@ -52,6 +52,11 @@ function init() {
       ...saved.settings,
       dictation: { ...seed.dictation, ...(saved.settings.dictation || {}) },
       ai: { ...seed.ai, ...(saved.settings.ai || {}) },
+    }
+    // Migrate away from the old (Anthropic) provider — its key/model don't work
+    // with the Gemini backend, so reset them to defaults.
+    if (!String(saved.settings.ai.model || '').startsWith('gemini')) {
+      saved.settings.ai = { apiKey: '', model: 'gemini-2.5-flash' }
     }
     return saved
   }

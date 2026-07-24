@@ -51,18 +51,19 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-6 pb-24">
-        {view === 'dashboard' && (
-          <Dashboard onStartQuiz={startQuiz} onStartDictation={startDictation} />
-        )}
-        {view === 'quiz' && (
-          <QuizMode words={session.words} onFinish={finish} onExit={goHome} />
-        )}
-        {view === 'dictation' && (
-          <DictationMode words={session.words} onFinish={finish} onExit={goHome} />
-        )}
-        {view === 'summary' && (
-          <Analytics summary={summary} onHome={goHome} />
-        )}
+        {/* key changes per view → the wrapper remounts and animates in */}
+        <div key={view} className="animate-fade-in">
+          {view === 'dashboard' && (
+            <Dashboard onStartQuiz={startQuiz} onStartDictation={startDictation} />
+          )}
+          {view === 'quiz' && (
+            <QuizMode words={session.words} onFinish={finish} onExit={goHome} />
+          )}
+          {view === 'dictation' && (
+            <DictationMode words={session.words} onFinish={finish} onExit={goHome} />
+          )}
+          {view === 'summary' && <Analytics summary={summary} onHome={goHome} />}
+        </div>
       </main>
 
       {view === 'dashboard' && (

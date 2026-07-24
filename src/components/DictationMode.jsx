@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
 import { ToneText, TonePinyin } from './ToneText.jsx'
 import { ProgressHeader } from './QuizMode.jsx'
+import Select from './ui/Select.jsx'
+import Segmented from './ui/Segmented.jsx'
 import {
   isSpeechSupported,
   ensureVoicesLoaded,
@@ -216,64 +218,63 @@ export default function DictationMode({ words, onFinish, onExit }) {
       )}
 
       {/* Settings */}
-      <div className="card p-4">
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className="label">Write pause</label>
-            <select
-              className="input"
-              value={cfg.interval}
-              onChange={(e) => updateCfg({ interval: Number(e.target.value) })}
-              disabled={isPlaying}
-            >
-              {[3, 5, 8, 10, 15, 20].map((s) => (
-                <option key={s} value={s}>{s}s</option>
-              ))}
-            </select>
-          </div>
+      <div className="card space-y-4 p-4">
+        <div>
+          <label className="label">Write pause</label>
+          <Segmented
+            ariaLabel="Write pause"
+            className="w-full"
+            value={cfg.interval}
+            disabled={isPlaying}
+            onChange={(v) => updateCfg({ interval: v })}
+            options={[3, 5, 8, 10, 15, 20].map((s) => ({ value: s, label: `${s}s` }))}
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="label">Repeats</label>
-            <select
-              className="input"
+            <Segmented
+              ariaLabel="Repeats"
+              className="w-full"
               value={cfg.repeats}
-              onChange={(e) => updateCfg({ repeats: Number(e.target.value) })}
               disabled={isPlaying}
-            >
-              {[1, 2, 3].map((s) => (
-                <option key={s} value={s}>{s}×</option>
-              ))}
-            </select>
+              onChange={(v) => updateCfg({ repeats: v })}
+              options={[1, 2, 3].map((s) => ({ value: s, label: `${s}×` }))}
+            />
           </div>
           <div>
             <label className="label">Speed</label>
-            <select
-              className="input"
+            <Segmented
+              ariaLabel="Speed"
+              className="w-full"
               value={cfg.rate}
-              onChange={(e) => updateCfg({ rate: Number(e.target.value) })}
-            >
-              <option value={0.6}>Slow</option>
-              <option value={0.9}>Normal</option>
-              <option value={1.1}>Fast</option>
-            </select>
+              onChange={(v) => updateCfg({ rate: v })}
+              options={[
+                { value: 0.6, label: 'Slow' },
+                { value: 0.9, label: 'Normal' },
+                { value: 1.1, label: 'Fast' },
+              ]}
+            />
           </div>
         </div>
         {ttsSupported && (
-          <div className="mt-3">
+          <div>
             <label className="label">Voice</label>
             <div className="flex gap-2">
-              <select
-                className="input"
+              <Select
+                className="flex-1"
+                ariaLabel="Voice"
                 value={cfg.voiceURI || ''}
-                onChange={(e) => updateCfg({ voiceURI: e.target.value })}
-              >
-                <option value="">Best available (auto)</option>
-                {voices.map((v) => (
-                  <option key={v.voiceURI} value={v.voiceURI}>
-                    {v.name}
-                    {v.localService === false ? ' · online' : ''}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => updateCfg({ voiceURI: v })}
+                options={[
+                  { value: '', label: 'Best available (auto)' },
+                  ...voices.map((v) => ({
+                    value: v.voiceURI,
+                    label: v.name,
+                    hint: v.localService === false ? 'online' : undefined,
+                  })),
+                ]}
+              />
               <button
                 className="btn-secondary shrink-0"
                 type="button"
@@ -295,7 +296,7 @@ export default function DictationMode({ words, onFinish, onExit }) {
           </div>
         )}
         {isPlaying && (
-          <p className="mt-2 text-xs text-slate-400">Pause the session to change timing.</p>
+          <p className="text-xs text-slate-400">Pause the session to change timing.</p>
         )}
       </div>
 
@@ -321,7 +322,9 @@ export default function DictationMode({ words, onFinish, onExit }) {
 
           {phase === 'writing' && (
             <div className="flex flex-col items-center gap-2">
-              <div className="text-6xl font-bold tabular-nums text-slate-800">{countdown}</div>
+              <div key={countdown} className="animate-tick text-6xl font-bold tabular-nums text-slate-800">
+                {countdown}
+              </div>
               <span className="text-sm text-slate-400">
                 Write it now{!ttsSupported && current ? ' — ' : ''}
               </span>
@@ -332,7 +335,7 @@ export default function DictationMode({ words, onFinish, onExit }) {
           )}
 
           {(phase === 'reveal' || phase === 'done') && current && (
-            <div className="space-y-2">
+            <div className="animate-pop space-y-2">
               <ToneText hanzi={current.hanzi} pinyin={current.pinyin} className="text-6xl font-bold" />
               <div className="text-lg"><TonePinyin pinyin={current.pinyin} /></div>
               <div className="text-slate-500">{current.english}</div>
@@ -411,12 +414,17 @@ function ReplayIcon() {
 }
 function SoundWave() {
   return (
-    <div className="flex items-end gap-1">
+    <div className="flex h-10 items-center gap-1">
       {[0, 1, 2, 3, 4].map((i) => (
         <span
           key={i}
-          className="w-1.5 animate-pulse rounded-full bg-slate-400"
-          style={{ height: `${12 + (i % 3) * 10}px`, animationDelay: `${i * 120}ms` }}
+          className="w-1.5 rounded-full bg-emerald-500/80"
+          style={{
+            height: '32px',
+            transformOrigin: 'center',
+            animation: 'soundBar 0.9s ease-in-out infinite',
+            animationDelay: `${i * 120}ms`,
+          }}
         />
       ))}
     </div>

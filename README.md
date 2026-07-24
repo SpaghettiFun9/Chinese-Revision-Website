@@ -33,6 +33,10 @@ npm run preview
 ### 1. Vocabulary & topics
 - Manual entry (Chinese / Pinyin / English) with a live tone-colored preview.
 - Bulk import: paste tab- or comma-separated rows (`汉字 , pīnyīn , english`). Pinyin optional.
+- **Photo import (AI)** — upload or snap a photo of a handwritten/printed vocab list and
+  Google **Gemini** reads it, filling in any missing pinyin/English. Uses your own free
+  [Google AI Studio](https://aistudio.google.com/apikey) key, stored only in your browser.
+  HEIC (iPhone) photos are converted automatically. Review/edit rows before importing.
 - Create topics (e.g. “Food”, “HSK 3”), assign/reassign words, search and edit inline.
 
 ### 2. Translation Quiz

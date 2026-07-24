@@ -1,21 +1,23 @@
 // ---------------------------------------------------------------------------
 // AI vocabulary extraction from a photo of a handwritten (or printed) list.
 //
-// Uses the official Anthropic SDK directly from the browser with the user's own
-// API key. Claude reads the image and returns a structured JSON list of
-// {hanzi, pinyin, english}; structured outputs guarantee the shape.
+// Uses the free Google AI Studio (Gemini) API directly from the browser with
+// the user's own API key. Gemini reads the image and returns a structured JSON
+// list of {hanzi, pinyin, english}; a responseSchema guarantees the shape.
 // ---------------------------------------------------------------------------
 
-import Anthropic from '@anthropic-ai/sdk'
 import { splitDataUrl } from './image.js'
 
-export const DEFAULT_MODEL = 'claude-opus-4-8'
+export const DEFAULT_MODEL = 'gemini-2.5-flash'
 
 export const MODEL_OPTIONS = [
-  { id: 'claude-opus-4-8', label: 'Opus 4.8 — most accurate (recommended)' },
-  { id: 'claude-sonnet-5', label: 'Sonnet 5 — faster, cheaper' },
-  { id: 'claude-haiku-4-5', label: 'Haiku 4.5 — fastest, cheapest' },
+  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash — recommended (free)' },
+  { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash — fastest (free)' },
+  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro — most accurate (free tier)' },
 ]
+
+const endpoint = (model) =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
 
 const SYSTEM = `You are a meticulous Mandarin Chinese teacher and OCR expert. You read photos of vocabulary lists — often handwritten — and transcribe them into clean, structured data.`
 
@@ -32,78 +34,102 @@ Rules:
 - If handwriting is ambiguous, use your best judgment for the most likely intended word.
 - Do not invent entries that aren't present.
 
-Return the entries via the required JSON schema.`
+Return the entries as JSON matching the required schema.`
 
+// Gemini uses the OpenAPI-subset schema format (uppercase type names).
 const SCHEMA = {
-  type: 'object',
+  type: 'OBJECT',
   properties: {
     words: {
-      type: 'array',
+      type: 'ARRAY',
       items: {
-        type: 'object',
+        type: 'OBJECT',
         properties: {
-          hanzi: { type: 'string' },
-          pinyin: { type: 'string' },
-          english: { type: 'string' },
+          hanzi: { type: 'STRING' },
+          pinyin: { type: 'STRING' },
+          english: { type: 'STRING' },
         },
         required: ['hanzi', 'pinyin', 'english'],
-        additionalProperties: false,
       },
     },
   },
   required: ['words'],
-  additionalProperties: false,
 }
 
 /**
- * Send the image to Claude and get back parsed vocabulary rows.
+ * Send the image to Gemini and get back parsed vocabulary rows.
  * @param {{ apiKey: string, model?: string, imageDataUrl: string }} args
  * @returns {Promise<Array<{hanzi:string,pinyin:string,english:string}>>}
  */
 export async function parseVocabImage({ apiKey, model, imageDataUrl }) {
-  if (!apiKey) throw new Error('Please add your Anthropic API key first.')
+  if (!apiKey) throw new Error('Please add your Google AI Studio API key first.')
+  const chosen = model || DEFAULT_MODEL
   const { mediaType, base64 } = splitDataUrl(imageDataUrl)
 
-  const client = new Anthropic({
-    apiKey,
-    dangerouslyAllowBrowser: true, // user-supplied key, personal local app
-  })
+  const generationConfig = {
+    temperature: 0,
+    maxOutputTokens: 8192,
+    responseMimeType: 'application/json',
+    responseSchema: SCHEMA,
+  }
+  // Gemini 2.5 Flash "thinks" by default, which can eat the output budget on a
+  // simple extraction — turn it off so all tokens go to the answer.
+  if (/2\.5-flash/.test(chosen)) generationConfig.thinkingConfig = { thinkingBudget: 0 }
 
-  let response
+  let res
   try {
-    response = await client.messages.create({
-      model: model || DEFAULT_MODEL,
-      max_tokens: 8000,
-      system: SYSTEM,
-      thinking: { type: 'adaptive' },
-      output_config: {
-        effort: 'medium',
-        format: { type: 'json_schema', schema: SCHEMA },
+    res = await fetch(endpoint(chosen), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey, // key in a header, never the URL
       },
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-            { type: 'text', text: PROMPT },
-          ],
-        },
-      ],
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM }] },
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { inline_data: { mime_type: mediaType, data: base64 } },
+              { text: PROMPT },
+            ],
+          },
+        ],
+        generationConfig,
+      }),
     })
-  } catch (err) {
-    throw new Error(friendlyError(err))
+  } catch {
+    throw new Error('Network error. Check your connection and try again.')
   }
 
-  if (response.stop_reason === 'refusal') {
-    throw new Error('The model declined to process this image. Try a clearer photo of the vocabulary list.')
+  let data = null
+  try {
+    data = await res.json()
+  } catch {
+    /* leave data null */
   }
 
-  const textBlock = (response.content || []).find((b) => b.type === 'text')
-  if (!textBlock?.text) throw new Error('No response was returned. Please try again.')
+  if (!res.ok) throw new Error(friendlyError(res.status, data))
+
+  if (data?.promptFeedback?.blockReason) {
+    throw new Error('The image was blocked by Gemini’s safety filters. Try a clear photo of just the vocabulary list.')
+  }
+
+  const cand = data?.candidates?.[0]
+  const finish = cand?.finishReason
+  if (finish && finish !== 'STOP' && finish !== 'MAX_TOKENS') {
+    throw new Error('Gemini could not process this image. Try a clearer, well-lit photo.')
+  }
+
+  const text = (cand?.content?.parts || [])
+    .map((p) => p.text)
+    .filter(Boolean)
+    .join('')
+  if (!text) throw new Error('No response was returned. Please try again.')
 
   let parsed
   try {
-    parsed = JSON.parse(textBlock.text)
+    parsed = JSON.parse(text)
   } catch {
     throw new Error('Could not read the AI response. Please try again.')
   }
@@ -118,16 +144,23 @@ export async function parseVocabImage({ apiKey, model, imageDataUrl }) {
     .filter((w) => w.hanzi && w.english)
 }
 
-function friendlyError(err) {
-  const status = err?.status
-  if (status === 401) return 'Invalid API key. Check the key and try again.'
-  if (status === 403) return "This API key doesn't have access to the selected model."
-  if (status === 404) return 'Model not found for this key. Try a different model.'
-  if (status === 429) return 'Rate limit hit. Wait a moment and try again.'
-  if (status === 413) return 'The image is too large. Try a smaller photo.'
-  if (status >= 500) return 'The service is temporarily unavailable. Try again shortly.'
-  // Network / CORS / other
-  return err?.message
-    ? `Request failed: ${err.message}`
-    : 'Request failed. Check your connection and API key.'
+function friendlyError(status, data) {
+  const msg = data?.error?.message || ''
+  const statusStr = data?.error?.status || ''
+  const hay = `${msg} ${statusStr}`
+
+  if (status === 400 && /API key not valid|API_KEY_INVALID|invalid.*key/i.test(hay)) {
+    return 'Invalid API key. Get a free key at aistudio.google.com/apikey and paste it above.'
+  }
+  if (status === 429 || /RESOURCE_EXHAUSTED|quota|rate/i.test(hay)) {
+    return "You've hit the free-tier rate limit. Wait a minute and try again (or switch to Gemini 2.0 Flash)."
+  }
+  if (status === 403) {
+    return msg || 'Access denied. Check the API key and that the Generative Language API is enabled.'
+  }
+  if (status === 404) {
+    return 'That model isn’t available for this key. Try a different Gemini model.'
+  }
+  if (status >= 500) return 'Gemini is temporarily unavailable. Try again shortly.'
+  return msg ? `Request failed: ${msg}` : 'Request failed. Check your API key and try again.'
 }

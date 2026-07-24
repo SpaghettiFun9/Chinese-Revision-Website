@@ -104,7 +104,7 @@ export default function QuizMode({ words, onFinish, onExit }) {
           <div className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
             Translate to English
           </div>
-          <div className="flex items-center justify-center gap-3">
+          <div key={current.id} className="animate-pop flex items-center justify-center gap-3">
             <ToneText hanzi={current.hanzi} pinyin={current.pinyin} className="text-6xl font-bold sm:text-7xl" />
             {isSpeechSupported() && (
               <button
@@ -158,7 +158,7 @@ export default function QuizMode({ words, onFinish, onExit }) {
         {status === 'checked' && (
           <div
             className={`mt-4 rounded-xl p-4 text-center ${
-              lastCorrect ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'
+              lastCorrect ? 'animate-pop bg-emerald-50 text-emerald-800' : 'animate-shake bg-red-50 text-red-800'
             }`}
           >
             <div className="text-lg font-bold">

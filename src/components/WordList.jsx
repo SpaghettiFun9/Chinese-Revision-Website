@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
 import { ToneText, TonePinyin } from './ToneText.jsx'
+import Select from './ui/Select.jsx'
 
 export default function WordList() {
   const { state, dispatch } = useApp()
@@ -34,14 +35,16 @@ export default function WordList() {
       </div>
 
       <div className="mb-3 flex flex-col gap-2 sm:flex-row">
-        <select className="input sm:max-w-[45%]" value={filter} onChange={(e) => setFilter(e.target.value)}>
-          <option value="all">All topics</option>
-          {state.topics.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
+        <Select
+          className="sm:max-w-[45%]"
+          ariaLabel="Filter by topic"
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: 'all', label: 'All topics' },
+            ...state.topics.map((t) => ({ value: t.id, label: t.name })),
+          ]}
+        />
         <input
           className="input"
           placeholder="Search…"
@@ -125,14 +128,16 @@ function EditRow({ word, onDone }) {
         <input className="input" value={english} onChange={(e) => setEnglish(e.target.value)} />
       </div>
       <div className="flex gap-2">
-        <select className="input" value={topicId} onChange={(e) => setTopicId(e.target.value)}>
-          <option value="">— No topic —</option>
-          {state.topics.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
+        <Select
+          className="flex-1"
+          ariaLabel="Topic"
+          value={topicId}
+          onChange={setTopicId}
+          options={[
+            { value: '', label: '— No topic —' },
+            ...state.topics.map((t) => ({ value: t.id, label: t.name })),
+          ]}
+        />
         <button className="btn-primary shrink-0" onClick={save}>
           Save
         </button>

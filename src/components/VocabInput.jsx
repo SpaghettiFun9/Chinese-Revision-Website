@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext.jsx'
 import { ToneText, TonePinyin } from './ToneText.jsx'
 import { prepareImage } from '../utils/image.js'
 import { parseVocabImage, MODEL_OPTIONS } from '../utils/ai.js'
+import Select from './ui/Select.jsx'
 
 const SAMPLE = `你好\tnǐ hǎo\thello
 谢谢, xiè xie, thank you
@@ -41,14 +42,15 @@ export default function VocabInput() {
 
       <div className="mb-4">
         <label className="label">Assign to topic</label>
-        <select className="input" value={topicId} onChange={(e) => setTopicId(e.target.value)}>
-          <option value="">— No topic —</option>
-          {state.topics.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
+        <Select
+          ariaLabel="Assign to topic"
+          value={topicId}
+          onChange={setTopicId}
+          options={[
+            { value: '', label: '— No topic —' },
+            ...state.topics.map((t) => ({ value: t.id, label: t.name })),
+          ]}
+        />
       </div>
 
       {mode === 'manual' && <ManualForm topicId={topicId} />}
@@ -270,7 +272,7 @@ function PhotoForm({ topicId }) {
           )}
         </button>
       ) : (
-        <div className="space-y-3">
+        <div className="animate-slide-up space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs font-medium text-slate-500">
               {rows.length} entr{rows.length === 1 ? 'y' : 'ies'} — review &amp; edit before importing
@@ -322,7 +324,7 @@ function ApiKeyPanel() {
         onClick={() => setOpen((v) => !v)}
       >
         <span className="text-sm font-semibold text-slate-700">
-          Anthropic API key{' '}
+          Google AI Studio API key{' '}
           {ai.apiKey ? (
             <span className="text-emerald-600">· set ✓</span>
           ) : (
@@ -339,35 +341,34 @@ function ApiKeyPanel() {
             <input
               className="input font-mono text-xs"
               type="password"
-              placeholder="sk-ant-…"
+              placeholder="AIza…"
               value={ai.apiKey}
               onChange={(e) => set({ apiKey: e.target.value.trim() })}
               autoComplete="off"
               spellCheck="false"
             />
             <p className="mt-1 text-xs text-slate-400">
-              Used only to call Anthropic directly from your browser and stored locally on this
-              device (LocalStorage). Get one at{' '}
+              Gemini has a free tier. Used only to call Google directly from your browser and stored
+              locally on this device (LocalStorage). Get a free key at{' '}
               <a
                 className="underline"
-                href="https://console.anthropic.com/settings/keys"
+                href="https://aistudio.google.com/apikey"
                 target="_blank"
                 rel="noreferrer"
               >
-                console.anthropic.com
+                aistudio.google.com/apikey
               </a>
               . Clear it anytime below.
             </p>
           </div>
           <div>
             <label className="label">Model</label>
-            <select className="input" value={ai.model} onChange={(e) => set({ model: e.target.value })}>
-              {MODEL_OPTIONS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
+            <Select
+              ariaLabel="AI model"
+              value={ai.model}
+              onChange={(v) => set({ model: v })}
+              options={MODEL_OPTIONS.map((m) => ({ value: m.id, label: m.label }))}
+            />
           </div>
           {ai.apiKey && (
             <button

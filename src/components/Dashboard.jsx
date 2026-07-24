@@ -4,6 +4,7 @@ import { buildQueue } from '../utils/srs.js'
 import TopicManager from './TopicManager.jsx'
 import VocabInput from './VocabInput.jsx'
 import WordList from './WordList.jsx'
+import Select from './ui/Select.jsx'
 
 export default function Dashboard({ onStartQuiz, onStartDictation }) {
   const { state } = useApp()
@@ -70,21 +71,19 @@ function StudyLauncher({ onStartQuiz, onStartDictation }) {
     <div className="space-y-6">
       <div className="card p-5">
         <label className="label">Choose what to study</label>
-        <select
-          className="input"
+        <Select
+          ariaLabel="Choose what to study"
           value={topicId}
-          onChange={(e) => setTopicId(e.target.value)}
-        >
-          <option value="all">All topics ({state.words.length} words)</option>
-          {state.topics.map((t) => {
-            const count = state.words.filter((w) => w.topicId === t.id).length
-            return (
-              <option key={t.id} value={t.id}>
-                {t.name} ({count})
-              </option>
-            )
-          })}
-        </select>
+          onChange={setTopicId}
+          options={[
+            { value: 'all', label: `All topics`, hint: `${state.words.length} words` },
+            ...state.topics.map((t) => ({
+              value: t.id,
+              label: t.name,
+              hint: `${state.words.filter((w) => w.topicId === t.id).length} words`,
+            })),
+          ]}
+        />
         <p className="mt-3 text-sm text-slate-500">
           {canStart ? (
             <>
@@ -125,7 +124,7 @@ function StudyLauncher({ onStartQuiz, onStartDictation }) {
 
 function ModeCard({ title, zh, desc, accent, disabled, onClick, cta }) {
   return (
-    <div className="card flex flex-col overflow-hidden">
+    <div className="card hover-bob flex flex-col overflow-hidden">
       <div className={`bg-gradient-to-r ${accent} px-5 py-4`}>
         <div className="font-hanzi text-2xl font-bold text-white">{zh}</div>
         <div className="text-sm font-semibold text-white/90">{title}</div>

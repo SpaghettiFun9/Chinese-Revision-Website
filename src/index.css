@@ -17,8 +17,9 @@
 @layer components {
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold
-      transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-40
-      disabled:cursor-not-allowed select-none;
+      transition-[color,background-color,box-shadow,transform] duration-150 focus:outline-none
+      focus:ring-2 focus:ring-offset-1 disabled:opacity-40 disabled:cursor-not-allowed select-none
+      active:scale-[0.97];
   }
   .btn-primary {
     @apply btn bg-slate-900 text-white hover:bg-slate-700 focus:ring-slate-400;
@@ -31,6 +32,15 @@
   }
   .card {
     @apply rounded-2xl bg-white shadow-sm ring-1 ring-slate-200;
+  }
+  /* Smooth floating "bob" on hover — gentle ease in, gentle settle out. */
+  .hover-bob {
+    @apply transition-[transform,box-shadow] duration-500 ease-out;
+    will-change: transform;
+  }
+  .hover-bob:hover {
+    @apply shadow-xl;
+    animation: floatBob 3.2s ease-in-out infinite;
   }
   .input {
     @apply w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-inset ring-slate-300
@@ -46,4 +56,65 @@ input[type='number']::-webkit-outer-spin-button,
 input[type='number']::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
+}
+
+/* ---- Animations ---------------------------------------------------------- */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.85); }
+  60% { transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes shakeX {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+@keyframes soundBar {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+@keyframes tick {
+  0% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+@keyframes floatBob {
+  0% { transform: translateY(0); }
+  35% { transform: translateY(-9px); }
+  70% { transform: translateY(-5px); }
+  100% { transform: translateY(-9px); }
+}
+
+@layer utilities {
+  .animate-fade-in { animation: fadeIn 0.25s ease both; }
+  .animate-slide-up { animation: slideUp 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .animate-scale-in { animation: scaleIn 0.16s ease both; }
+  .animate-pop { animation: popIn 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .animate-shake { animation: shakeX 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+  .animate-tick { animation: tick 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+}
+
+/* Respect users who prefer reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
