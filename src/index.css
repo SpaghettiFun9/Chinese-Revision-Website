@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-slate-100 text-slate-800 antialiased;
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold
+      transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-40
+      disabled:cursor-not-allowed select-none;
+  }
+  .btn-primary {
+    @apply btn bg-slate-900 text-white hover:bg-slate-700 focus:ring-slate-400;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:ring-slate-400;
+  }
+  .btn-ghost {
+    @apply btn text-slate-600 hover:bg-slate-200/70 focus:ring-slate-300;
+  }
+  .card {
+    @apply rounded-2xl bg-white shadow-sm ring-1 ring-slate-200;
+  }
+  .input {
+    @apply w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-inset ring-slate-300
+      placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-slate-500 outline-none;
+  }
+  .label {
+    @apply block text-xs font-medium uppercase tracking-wide text-slate-500 mb-1;
+  }
+}
+
+/* Hide number input spinners for a cleaner look */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(claude-api)",
+      "Skill(claude-api:*)",
+      "Bash(npm install *)",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/@anthropic-ai/sdk/package.json'\\).version\\)\")",
+      "Bash(npm run *)"
+    ]
+  }
+}
