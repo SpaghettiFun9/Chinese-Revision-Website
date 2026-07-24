@@ -1,16 +1,24 @@
 import { useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
 import { ToneText, TonePinyin } from './ToneText.jsx'
-import { prepareImage } from '../utils/image.js'
-import { parseVocabImage, MODEL_OPTIONS } from '../utils/ai.js'
 import Select from './ui/Select.jsx'
 
 const SAMPLE = `你好\tnǐ hǎo\thello
 谢谢, xiè xie, thank you
 学生\txué shēng\tstudent`
 
+// A prompt the user can hand to any AI chatbot along with a photo of their list.
+const CHATBOT_PROMPT = `Here is a photo of a Chinese vocabulary list. Transcribe every word into a plain code block, one word per line, using a Tab character to separate three fields in this exact order:
+
+Chinese(汉字)\tpinyin\tEnglish
+
+Rules:
+- Use tone-marked pinyin, lowercase (e.g. nǐ hǎo).
+- Fill in any pinyin or English that is missing from the photo.
+- Keep the original order. No header row, no numbering, no extra text — just the rows.`
+
 export default function VocabInput() {
-  const { state, dispatch } = useApp()
+  const { state } = useApp()
   const [mode, setMode] = useState('manual') // 'manual' | 'bulk'
   const [topicId, setTopicId] = useState('')
 
@@ -31,12 +39,6 @@ export default function VocabInput() {
           >
             Bulk import
           </button>
-          <button
-            className={`rounded-md px-2.5 py-1 font-medium ${mode === 'photo' ? 'bg-white shadow-sm' : 'text-slate-500'}`}
-            onClick={() => setMode('photo')}
-          >
-            Photo (AI)
-          </button>
         </div>
       </div>
 
@@ -55,7 +57,6 @@ export default function VocabInput() {
 
       {mode === 'manual' && <ManualForm topicId={topicId} />}
       {mode === 'bulk' && <BulkForm topicId={topicId} />}
-      {mode === 'photo' && <PhotoForm topicId={topicId} />}
     </div>
   )
 }
@@ -109,8 +110,19 @@ function BulkForm({ topicId }) {
   const { dispatch } = useApp()
   const [text, setText] = useState('')
   const [error, setError] = useState('')
+  const [copied, setCopied] = useState(false)
 
   const parsed = parseBulk(text)
+
+  const copyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(CHATBOT_PROMPT)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1600)
+    } catch {
+      setError('Could not copy — select the prompt text and copy it manually.')
+    }
+  }
 
   const submit = () => {
     if (!parsed.length) {
@@ -124,6 +136,23 @@ function BulkForm({ topicId }) {
 
   return (
     <div className="space-y-3">
+      {/* Photo → chatbot helper */}
+      <div className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <span className="text-sm font-semibold text-slate-700">Have a photo of a list?</span>
+          <button className="btn-secondary shrink-0 !px-2.5 !py-1 text-xs" onClick={copyPrompt}>
+            {copied ? 'Copied ✓' : 'Copy prompt'}
+          </button>
+        </div>
+        <p className="mb-2 text-xs text-slate-400">
+          No account needed — paste this prompt and your photo into any AI chatbot (ChatGPT, Gemini,
+          Claude…), then paste its reply into the box below.
+        </p>
+        <pre className="max-h-28 overflow-auto whitespace-pre-wrap rounded-md bg-white p-2 font-mono text-[11px] leading-relaxed text-slate-600 ring-1 ring-slate-200">
+          {CHATBOT_PROMPT}
+        </pre>
+      </div>
+
       <div>
         <label className="label">Paste rows (tab or comma separated)</label>
         <textarea
@@ -169,227 +198,6 @@ function BulkForm({ topicId }) {
         </button>
       </div>
     </div>
-  )
-}
-
-function PhotoForm({ topicId }) {
-  const { state, dispatch } = useApp()
-  const ai = state.settings.ai
-  const [image, setImage] = useState('') // downscaled data URL
-  const [status, setStatus] = useState('idle') // 'idle' | 'loading' | 'done' | 'error'
-  const [error, setError] = useState('')
-  const [rows, setRows] = useState([]) // editable parsed rows
-
-  const onPick = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setError('')
-    setRows([])
-    setStatus('idle')
-    try {
-      const dataUrl = await prepareImage(file)
-      setImage(dataUrl)
-    } catch (err) {
-      setError(err.message || 'Could not load that image.')
-      setStatus('error')
-    }
-    e.target.value = '' // allow re-picking the same file
-  }
-
-  const analyze = async () => {
-    if (!image) return
-    setStatus('loading')
-    setError('')
-    try {
-      const words = await parseVocabImage({
-        apiKey: ai.apiKey,
-        model: ai.model,
-        imageDataUrl: image,
-      })
-      if (!words.length) {
-        setError('No vocabulary was found in that image. Try a clearer photo.')
-        setStatus('error')
-        return
-      }
-      setRows(words)
-      setStatus('done')
-    } catch (err) {
-      setError(err.message || 'Something went wrong.')
-      setStatus('error')
-    }
-  }
-
-  const updateRow = (i, field, value) =>
-    setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)))
-  const removeRow = (i) => setRows((rs) => rs.filter((_, idx) => idx !== i))
-
-  const importAll = () => {
-    const valid = rows.filter((r) => r.hanzi.trim() && r.english.trim())
-    if (!valid.length) return
-    dispatch({ type: 'ADD_WORDS_BULK', words: valid, topicId })
-    setRows([])
-    setImage('')
-    setStatus('idle')
-  }
-
-  return (
-    <div className="space-y-4">
-      <ApiKeyPanel />
-
-      <div>
-        <label className="label">Photo of a vocabulary list</label>
-        <label className="btn-secondary w-full cursor-pointer">
-          <input type="file" accept="image/*" className="hidden" onChange={onPick} />
-          {image ? 'Choose a different photo' : 'Upload or take a photo'}
-        </label>
-        <p className="mt-1 text-xs text-slate-400">
-          On a phone this opens your camera or photo library. Any layout works — the AI reads
-          Chinese, pinyin, and/or English and fills in whatever is missing. For best results:
-          clear, well-lit, one word per line.
-        </p>
-      </div>
-
-      {image && (
-        <div className="overflow-hidden rounded-lg ring-1 ring-slate-200">
-          <img src={image} alt="Vocabulary list preview" className="max-h-56 w-full object-contain bg-slate-50" />
-        </div>
-      )}
-
-      {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-
-      {rows.length === 0 ? (
-        <button
-          className="btn-primary w-full"
-          onClick={analyze}
-          disabled={!image || status === 'loading' || !ai.apiKey}
-        >
-          {status === 'loading' ? (
-            <>
-              <Spinner /> Reading the list…
-            </>
-          ) : (
-            'Analyze with AI'
-          )}
-        </button>
-      ) : (
-        <div className="animate-slide-up space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-slate-500">
-              {rows.length} entr{rows.length === 1 ? 'y' : 'ies'} — review &amp; edit before importing
-            </p>
-            <button className="text-xs text-slate-500 underline" onClick={analyze}>
-              Re-scan
-            </button>
-          </div>
-          <ul className="max-h-72 space-y-2 overflow-auto">
-            {rows.map((r, i) => (
-              <li key={i} className="rounded-lg bg-slate-50 p-2">
-                <div className="mb-1 flex items-center justify-between">
-                  <ToneText hanzi={r.hanzi} pinyin={r.pinyin} className="text-lg" />
-                  <button
-                    className="text-xs text-red-500 hover:underline"
-                    onClick={() => removeRow(i)}
-                  >
-                    remove
-                  </button>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <input className="input font-hanzi" value={r.hanzi} onChange={(e) => updateRow(i, 'hanzi', e.target.value)} />
-                  <input className="input" value={r.pinyin} onChange={(e) => updateRow(i, 'pinyin', e.target.value)} />
-                  <input className="input" value={r.english} onChange={(e) => updateRow(i, 'english', e.target.value)} />
-                </div>
-              </li>
-            ))}
-          </ul>
-          <button className="btn-primary w-full" onClick={importAll}>
-            Import {rows.length} word{rows.length === 1 ? '' : 's'}
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ApiKeyPanel() {
-  const { state, dispatch } = useApp()
-  const ai = state.settings.ai
-  const [open, setOpen] = useState(!ai.apiKey)
-
-  const set = (changes) => dispatch({ type: 'SET_AI_SETTINGS', settings: changes })
-
-  return (
-    <div className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
-      <button
-        className="flex w-full items-center justify-between text-left"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className="text-sm font-semibold text-slate-700">
-          Google AI Studio API key{' '}
-          {ai.apiKey ? (
-            <span className="text-emerald-600">· set ✓</span>
-          ) : (
-            <span className="text-red-500">· required</span>
-          )}
-        </span>
-        <span className="text-xs text-slate-400">{open ? 'hide' : 'edit'}</span>
-      </button>
-
-      {open && (
-        <div className="mt-3 space-y-3">
-          <div>
-            <label className="label">API key</label>
-            <input
-              className="input font-mono text-xs"
-              type="password"
-              placeholder="AIza…"
-              value={ai.apiKey}
-              onChange={(e) => set({ apiKey: e.target.value.trim() })}
-              autoComplete="off"
-              spellCheck="false"
-            />
-            <p className="mt-1 text-xs text-slate-400">
-              Gemini has a free tier. Used only to call Google directly from your browser and stored
-              locally on this device (LocalStorage). Get a free key at{' '}
-              <a
-                className="underline"
-                href="https://aistudio.google.com/apikey"
-                target="_blank"
-                rel="noreferrer"
-              >
-                aistudio.google.com/apikey
-              </a>
-              . Clear it anytime below.
-            </p>
-          </div>
-          <div>
-            <label className="label">Model</label>
-            <Select
-              ariaLabel="AI model"
-              value={ai.model}
-              onChange={(v) => set({ model: v })}
-              options={MODEL_OPTIONS.map((m) => ({ value: m.id, label: m.label }))}
-            />
-          </div>
-          {ai.apiKey && (
-            <button
-              className="text-xs text-red-600 hover:underline"
-              onClick={() => set({ apiKey: '' })}
-            >
-              Clear API key from this device
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function Spinner() {
-  return (
-    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
-    </svg>
   )
 }
 

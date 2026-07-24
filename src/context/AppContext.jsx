@@ -35,7 +35,6 @@ function seedState() {
     settings: {
       dictation: { interval: 8, repeats: 2, rate: 0.9, voiceURI: '' },
       showPinyinHint: false,
-      ai: { apiKey: '', model: 'gemini-2.5-flash' },
     },
   }
 }
@@ -47,16 +46,11 @@ function init() {
     saved.words = saved.words.map((w) => ({ ...w, srs: w.srs || newSrs() }))
     // Backfill newer settings fields added after this state was first saved.
     const seed = seedState().settings
+    const { ai, ...rest } = saved.settings // drop the removed AI-import settings
     saved.settings = {
       ...seed,
-      ...saved.settings,
-      dictation: { ...seed.dictation, ...(saved.settings.dictation || {}) },
-      ai: { ...seed.ai, ...(saved.settings.ai || {}) },
-    }
-    // Migrate away from the old (Anthropic) provider — its key/model don't work
-    // with the Gemini backend, so reset them to defaults.
-    if (!String(saved.settings.ai.model || '').startsWith('gemini')) {
-      saved.settings.ai = { apiKey: '', model: 'gemini-2.5-flash' }
+      ...rest,
+      dictation: { ...seed.dictation, ...(rest.dictation || {}) },
     }
     return saved
   }
@@ -159,14 +153,6 @@ function reducer(state, action) {
       return {
         ...state,
         settings: { ...state.settings, showPinyinHint: !state.settings.showPinyinHint },
-      }
-    case 'SET_AI_SETTINGS':
-      return {
-        ...state,
-        settings: {
-          ...state.settings,
-          ai: { ...state.settings.ai, ...action.settings },
-        },
       }
 
     // ---- Danger zone ------------------------------------------------------
