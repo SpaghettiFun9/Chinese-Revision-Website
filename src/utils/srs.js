@@ -19,6 +19,15 @@ export function newSrs() {
   }
 }
 
+/**
+ * A word is "to review" while the last answer given for it was wrong. It stays
+ * flagged across sessions (it's persisted with the word) until answered
+ * correctly, which is what makes "practise my mistakes" work.
+ */
+export function needsReview(word) {
+  return word?.srs?.lastResult === 'incorrect'
+}
+
 /** Return an updated srs record after grading an answer. Pure — no mutation. */
 export function gradeSrs(srs, wasCorrect) {
   const base = srs || newSrs()
@@ -32,6 +41,15 @@ export function gradeSrs(srs, wasCorrect) {
     weight,
     lastResult: wasCorrect ? 'correct' : 'incorrect',
   }
+}
+
+/**
+ * Drop a word's review flag without pretending it was answered — used by the
+ * manual "mark as learned" action in the word list.
+ */
+export function clearReview(srs) {
+  const base = srs || newSrs()
+  return { ...base, lastResult: 'correct', weight: MIN_WEIGHT }
 }
 
 /**

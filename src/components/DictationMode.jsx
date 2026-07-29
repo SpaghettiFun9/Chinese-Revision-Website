@@ -13,8 +13,6 @@ import {
   stopSpeaking,
 } from '../utils/speech.js'
 
-const REVEAL_SECONDS = 4
-
 export default function DictationMode({ words, onFinish, onExit }) {
   const { state, dispatch } = useApp()
   const cfg = state.settings.dictation
@@ -26,6 +24,7 @@ export default function DictationMode({ words, onFinish, onExit }) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [reveal, setReveal] = useState(false)
+  const [awaitingGrade, setAwaitingGrade] = useState(false)
   const [ttsSupported] = useState(isSpeechSupported())
   const [voiceReady, setVoiceReady] = useState(false)
   const [noVoiceWarning, setNoVoiceWarning] = useState(false)
@@ -37,6 +36,7 @@ export default function DictationMode({ words, onFinish, onExit }) {
   const skipRef = useRef(false)
   const voiceRef = useRef(null)
   const resultsRef = useRef([])
+  const decisionRef = useRef(null) // resolve fn for the "did you get it right?" wait
 
   // Load voices up front so the first word speaks immediately.
   useEffect(() => {
@@ -56,13 +56,30 @@ export default function DictationMode({ words, onFinish, onExit }) {
     if (ttsSupported && voiceReady) voiceRef.current = getPreferredVoice(cfg.voiceURI)
   }, [cfg.voiceURI, ttsSupported, voiceReady])
 
-  // Cleanup on unmount: cancel the running loop and any speech.
+  // Cleanup on unmount: cancel the running loop, release any pending wait,
+  // and stop speech.
   useEffect(() => {
     return () => {
       tokenRef.current += 1
+      settleDecision()
       stopSpeaking()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // --- Self-check gate -----------------------------------------------------
+  // The reveal step blocks here until the user answers (or skips). There is no
+  // timer: the answer stays on screen for as long as they need.
+  const waitForDecision = () =>
+    new Promise((resolve) => {
+      decisionRef.current = resolve
+    })
+
+  const settleDecision = () => {
+    const resolve = decisionRef.current
+    decisionRef.current = null
+    if (resolve) resolve()
+  }
 
   // --- Interruptible countdown (honors pause, skip and cancellation) -------
   const sleepWithCountdown = (seconds, token) =>
@@ -130,13 +147,15 @@ export default function DictationMode({ words, onFinish, onExit }) {
         if (tokenRef.current !== token) return
       }
 
-      // Reveal the answer for self-check (buttons can end this early).
+      // Reveal the answer and wait — indefinitely — for the user's self-check.
       if (tokenRef.current !== token) return
       skipRef.current = false
       resultsRef.current.push({ word, correct: null })
       setReveal(true)
       setPhase('reveal')
-      await sleepWithCountdown(REVEAL_SECONDS, token)
+      setAwaitingGrade(true)
+      await waitForDecision()
+      setAwaitingGrade(false)
       if (tokenRef.current !== token) return
     }
 
@@ -161,7 +180,8 @@ export default function DictationMode({ words, onFinish, onExit }) {
   }
 
   const handlePause = () => {
-    if (!isPlaying || isPaused) return
+    // Nothing to pause while we're waiting on the user's self-check.
+    if (!isPlaying || isPaused || awaitingGrade) return
     pausedRef.current = true
     setIsPaused(true)
     if (phase === 'speaking' && ttsSupported) window.speechSynthesis.pause()
@@ -177,6 +197,8 @@ export default function DictationMode({ words, onFinish, onExit }) {
       window.speechSynthesis.resume()
       stopSpeaking()
     }
+    // If we're sitting on the self-check, release it (leaving it ungraded).
+    settleDecision()
   }
 
   const handleReplay = () => {
@@ -190,8 +212,26 @@ export default function DictationMode({ words, onFinish, onExit }) {
       last.correct = correct
       dispatch({ type: 'GRADE_WORD', id: last.word.id, correct })
     }
-    skipRef.current = true // end the reveal countdown → advance
+    settleDecision() // release the reveal gate → advance
   }
+
+  // Y / N answer the self-check without reaching for the mouse.
+  useEffect(() => {
+    if (!awaitingGrade) return
+    const onKey = (e) => {
+      const k = e.key.toLowerCase()
+      if (k === 'y') {
+        e.preventDefault()
+        grade(true)
+      } else if (k === 'n') {
+        e.preventDefault()
+        grade(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [awaitingGrade])
 
   const updateCfg = (changes) =>
     dispatch({ type: 'SET_DICTATION_SETTINGS', settings: changes })
@@ -343,16 +383,31 @@ export default function DictationMode({ words, onFinish, onExit }) {
           )}
         </div>
 
-        {/* Self-grade during reveal */}
+        {/* Self-grade during reveal — the session waits here for an answer */}
         {phase === 'reveal' && (
-          <div className="mt-4 flex items-center justify-center gap-3">
-            <span className="text-sm text-slate-400">Did you write it correctly?</span>
-            <button className="btn-secondary !text-emerald-700" onClick={() => grade(true)}>
-              ✓ Yes
-            </button>
-            <button className="btn-secondary !text-red-600" onClick={() => grade(false)}>
-              ✗ No
-            </button>
+          <div className="animate-slide-up mt-6 border-t border-slate-100 pt-5">
+            <p className="mb-3 text-sm font-medium text-slate-600">
+              Did you write it correctly?
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                className="btn-secondary flex-1 !border-emerald-200 !text-emerald-700 hover:!bg-emerald-50 sm:flex-none sm:px-8"
+                onClick={() => grade(true)}
+              >
+                ✓ Yes
+              </button>
+              <button
+                className="btn-secondary flex-1 !border-red-200 !text-red-600 hover:!bg-red-50 sm:flex-none sm:px-8"
+                onClick={() => grade(false)}
+              >
+                ✗ No
+              </button>
+            </div>
+            <p className="mt-3 text-xs text-slate-400">
+              Take your time — nothing advances until you choose. Press{' '}
+              <kbd className="rounded bg-slate-200 px-1">Y</kbd> or{' '}
+              <kbd className="rounded bg-slate-200 px-1">N</kbd>.
+            </p>
           </div>
         )}
       </div>
@@ -360,7 +415,7 @@ export default function DictationMode({ words, onFinish, onExit }) {
       {/* Transport controls */}
       <div className="flex items-center justify-center gap-3">
         {isPlaying && !isPaused ? (
-          <button className="btn-secondary" onClick={handlePause} disabled={!isPlaying}>
+          <button className="btn-secondary" onClick={handlePause} disabled={!isPlaying || awaitingGrade}>
             <PauseIcon /> Pause
           </button>
         ) : (
@@ -388,7 +443,7 @@ function PhaseBadge({ phase, repeatNum, repeats }) {
     idle: 'Ready',
     speaking: `Reading · ${repeatNum}/${repeats}`,
     writing: `Write it down · rep ${repeatNum}/${repeats}`,
-    reveal: 'Check your answer',
+    reveal: 'Check your answer · waiting for you',
     done: 'Finished',
   }
   return <span>{map[phase] || ''}</span>

@@ -50,7 +50,8 @@ npm run preview
 - Reads each word aloud (zh-CN), pauses a configurable interval (3–20s) for you to
   write it on paper, and repeats 1–3× before advancing.
 - **Play / Pause / Replay / Skip** transport controls; adjustable speaking speed.
-- Reveals the answer after each word with an optional self-grade (✓/✗).
+- Reveals the answer after each word and **waits** — no timer — until you self-grade
+  ✓/✗ (or press <kbd>Y</kbd>/<kbd>N</kbd>). Skip moves on without grading.
 - Gracefully warns if the browser has no TTS / no Chinese voice, and falls back to
   showing the character during the write step.
 
@@ -60,6 +61,10 @@ npm run preview
   diacritic (`hǎo`) and numbered (`hao3`) pinyin.
 - **SRS Lite** — words you miss gain weight and resurface more often; correct answers
   fade them out. A weighted queue is built for every session.
+- **Mistake tracking** — any word you get wrong (quiz or dictation) is flagged and
+  persists until you answer it correctly. Study just those via **✗ My mistakes** on
+  the dashboard, browse them with the **Needs review** filter in the word list, retry
+  them straight from a session summary, or clear a flag with **✓ Learned**.
 - **Session analytics** — accuracy %, correct/review counts, and a “words to review” list
   after every quiz or dictation.
 

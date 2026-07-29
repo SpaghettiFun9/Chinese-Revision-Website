@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useReducer } from 'react'
 import { loadState, saveState, uid } from '../utils/storage.js'
-import { newSrs, gradeSrs } from '../utils/srs.js'
+import { newSrs, gradeSrs, clearReview } from '../utils/srs.js'
 
 const AppContext = createContext(null)
 
@@ -130,6 +130,13 @@ function reducer(state, action) {
         ...state,
         words: state.words.map((w) =>
           w.id === action.id ? { ...w, srs: gradeSrs(w.srs, action.correct) } : w,
+        ),
+      }
+    case 'CLEAR_REVIEW':
+      return {
+        ...state,
+        words: state.words.map((w) =>
+          w.id === action.id ? { ...w, srs: clearReview(w.srs) } : w,
         ),
       }
     case 'RESET_SRS':

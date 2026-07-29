@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
 import { ToneText, TonePinyin } from './ToneText.jsx'
 import Select from './ui/Select.jsx'
+import { needsReview } from '../utils/srs.js'
 
 export default function WordList() {
   const { state, dispatch } = useApp()
@@ -11,9 +12,12 @@ export default function WordList() {
 
   const topicName = (id) => state.topics.find((t) => t.id === id)?.name || 'Unassigned'
 
+  const reviewCount = useMemo(() => state.words.filter(needsReview).length, [state.words])
+
   const words = useMemo(() => {
     let list = state.words
-    if (filter !== 'all') list = list.filter((w) => w.topicId === filter)
+    if (filter === 'review') list = list.filter(needsReview)
+    else if (filter !== 'all') list = list.filter((w) => w.topicId === filter)
     const q = query.trim().toLowerCase()
     if (q) {
       list = list.filter(
@@ -42,6 +46,11 @@ export default function WordList() {
           onChange={setFilter}
           options={[
             { value: 'all', label: 'All topics' },
+            {
+              value: 'review',
+              label: '✗ Needs review',
+              hint: `${reviewCount} word${reviewCount === 1 ? '' : 's'}`,
+            },
             ...state.topics.map((t) => ({ value: t.id, label: t.name })),
           ]}
         />
@@ -77,14 +86,23 @@ export default function WordList() {
                         {w.srs.correct}/{w.srs.seen} correct
                       </span>
                     )}
-                    {(w.srs?.weight ?? 1) > 2 && (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">
-                        review
+                    {needsReview(w) && (
+                      <span className="rounded-full bg-red-100 px-2 py-0.5 font-medium text-red-700">
+                        ✗ to review
                       </span>
                     )}
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-col gap-1">
+                  {needsReview(w) && (
+                    <button
+                      className="btn-ghost !px-2 !py-1 text-xs text-emerald-700 hover:bg-emerald-50"
+                      title="Clear the review flag"
+                      onClick={() => dispatch({ type: 'CLEAR_REVIEW', id: w.id })}
+                    >
+                      ✓ Learned
+                    </button>
+                  )}
                   <button className="btn-ghost !px-2 !py-1 text-xs" onClick={() => setEditingId(w.id)}>
                     Edit
                   </button>

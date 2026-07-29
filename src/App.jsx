@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useApp } from './context/AppContext.jsx'
+import { buildQueue } from './utils/srs.js'
 import Dashboard from './components/Dashboard.jsx'
 import QuizMode from './components/QuizMode.jsx'
 import DictationMode from './components/DictationMode.jsx'
@@ -29,6 +30,11 @@ export default function App() {
   const goHome = () => {
     setSession(null)
     setView('dashboard')
+  }
+  // Re-run a session using only the words just missed.
+  const retry = (mode, words) => {
+    setSession({ mode, words: buildQueue(words) })
+    setView(mode)
   }
 
   return (
@@ -62,7 +68,9 @@ export default function App() {
           {view === 'dictation' && (
             <DictationMode words={session.words} onFinish={finish} onExit={goHome} />
           )}
-          {view === 'summary' && <Analytics summary={summary} onHome={goHome} />}
+          {view === 'summary' && (
+            <Analytics summary={summary} onHome={goHome} onRetry={retry} />
+          )}
         </div>
       </main>
 

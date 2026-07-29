@@ -23,7 +23,7 @@ function useCountUp(target, duration = 800) {
   return val
 }
 
-export default function Analytics({ summary, onHome }) {
+export default function Analytics({ summary, onHome, onRetry }) {
   const { mode, results } = summary
   const graded = results.filter((r) => r.correct !== null)
   const correct = graded.filter((r) => r.correct).length
@@ -100,7 +100,8 @@ export default function Analytics({ summary, onHome }) {
             ))}
           </ul>
           <p className="mt-3 text-xs text-slate-400">
-            These have been boosted in your SRS and will appear more often next time.
+            These stay flagged as “to review” until you get them right. Find them anytime via
+            <b> My mistakes</b> on the dashboard.
           </p>
         </div>
       )}
@@ -111,8 +112,19 @@ export default function Analytics({ summary, onHome }) {
         </p>
       )}
 
-      <div className="flex gap-3">
-        <button className="btn-primary flex-1" onClick={onHome}>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        {toReview.length > 0 && onRetry && (
+          <button
+            className="btn-primary flex-1"
+            onClick={() => onRetry(mode, toReview.map((r) => r.word))}
+          >
+            Practise these {toReview.length} again
+          </button>
+        )}
+        <button
+          className={toReview.length > 0 && onRetry ? 'btn-secondary flex-1' : 'btn-primary flex-1'}
+          onClick={onHome}
+        >
           Back to dashboard
         </button>
       </div>

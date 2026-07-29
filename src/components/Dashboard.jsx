@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
-import { buildQueue } from '../utils/srs.js'
+import { buildQueue, needsReview } from '../utils/srs.js'
 import TopicManager from './TopicManager.jsx'
 import VocabInput from './VocabInput.jsx'
 import WordList from './WordList.jsx'
 import Select from './ui/Select.jsx'
+import Segmented from './ui/Segmented.jsx'
 
 export default function Dashboard({ onStartQuiz, onStartDictation }) {
   const { state } = useApp()
@@ -52,14 +53,20 @@ function TabButton({ active, onClick, children }) {
 function StudyLauncher({ onStartQuiz, onStartDictation }) {
   const { state } = useApp()
   const [topicId, setTopicId] = useState('all')
+  const [scope, setScope] = useState('all') // 'all' | 'mistakes'
 
-  const selectedWords = useMemo(() => {
+  const topicWords = useMemo(() => {
     if (topicId === 'all') return state.words
     return state.words.filter((w) => w.topicId === topicId)
   }, [state.words, topicId])
 
+  const mistakeWords = useMemo(() => topicWords.filter(needsReview), [topicWords])
+
+  // Fall back to all words if the mistakes list empties (e.g. after a session).
+  const effectiveScope = scope === 'mistakes' && mistakeWords.length === 0 ? 'all' : scope
+  const selectedWords = effectiveScope === 'mistakes' ? mistakeWords : topicWords
+
   const canStart = selectedWords.length > 0
-  const strugglingCount = selectedWords.filter((w) => (w.srs?.weight ?? 1) > 2).length
 
   const launch = (mode) => {
     const queue = buildQueue(selectedWords)
@@ -69,31 +76,63 @@ function StudyLauncher({ onStartQuiz, onStartDictation }) {
 
   return (
     <div className="space-y-6">
-      <div className="card p-5">
-        <label className="label">Choose what to study</label>
-        <Select
-          ariaLabel="Choose what to study"
-          value={topicId}
-          onChange={setTopicId}
-          options={[
-            { value: 'all', label: `All topics`, hint: `${state.words.length} words` },
-            ...state.topics.map((t) => ({
-              value: t.id,
-              label: t.name,
-              hint: `${state.words.filter((w) => w.topicId === t.id).length} words`,
-            })),
-          ]}
-        />
-        <p className="mt-3 text-sm text-slate-500">
-          {canStart ? (
+      <div className="card space-y-4 p-5">
+        <div>
+          <label className="label">Choose what to study</label>
+          <Select
+            ariaLabel="Choose what to study"
+            value={topicId}
+            onChange={setTopicId}
+            options={[
+              { value: 'all', label: `All topics`, hint: `${state.words.length} words` },
+              ...state.topics.map((t) => ({
+                value: t.id,
+                label: t.name,
+                hint: `${state.words.filter((w) => w.topicId === t.id).length} words`,
+              })),
+            ]}
+          />
+        </div>
+
+        <div>
+          <label className="label">Which words</label>
+          <Segmented
+            ariaLabel="Which words"
+            className="w-full"
+            value={effectiveScope}
+            onChange={setScope}
+            options={[
+              { value: 'all', label: `All (${topicWords.length})` },
+              {
+                value: 'mistakes',
+                label: `✗ My mistakes (${mistakeWords.length})`,
+                disabled: mistakeWords.length === 0,
+              },
+            ]}
+          />
+        </div>
+
+        <p className="text-sm text-slate-500">
+          {!canStart ? (
+            'No words here yet — add some in “Manage vocabulary”.'
+          ) : effectiveScope === 'mistakes' ? (
             <>
-              <span className="font-semibold text-slate-700">{selectedWords.length}</span> words ready
-              {strugglingCount > 0 && (
-                <> · <span className="font-semibold text-amber-600">{strugglingCount}</span> need review (shown more often)</>
-              )}
+              Practising the{' '}
+              <span className="font-semibold text-red-600">{selectedWords.length}</span> word
+              {selectedWords.length === 1 ? '' : 's'} you last got wrong. They clear once you get
+              them right.
             </>
           ) : (
-            'No words here yet — add some in “Manage vocabulary”.'
+            <>
+              <span className="font-semibold text-slate-700">{topicWords.length}</span> words ready
+              {mistakeWords.length > 0 && (
+                <>
+                  {' '}·{' '}
+                  <span className="font-semibold text-red-600">{mistakeWords.length}</span> to
+                  review
+                </>
+              )}
+            </>
           )}
         </p>
       </div>
