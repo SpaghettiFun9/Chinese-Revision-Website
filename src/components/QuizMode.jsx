@@ -55,7 +55,8 @@ export default function QuizMode({
   // Mirrors `status` synchronously so a double key-press can't submit or
   // advance twice within the same tick (state updates are async).
   const statusRef = useRef('answering')
-  // Lets the window key handler call the latest `advance` without TDZ issues.
+  // Let the window key handler call the latest submit/advance without TDZ issues.
+  const submitRef = useRef(null)
   const advanceRef = useRef(null)
 
   const current = words[index]
@@ -78,20 +79,23 @@ export default function QuizMode({
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // Once an answer is checked the input is disabled, so Enter can't reach it.
-  // Listen on the window so Enter still advances (and finishes the last one).
+  // Enter drives the whole quiz: check, then advance. This is a single listener
+  // registered once — deliberately NOT keyed on `status`. A listener added while
+  // the triggering keydown is still bubbling would catch that very same event
+  // and run both steps at once (check, then instantly skip to the next word).
+  // `statusRef` is updated synchronously, so one press does exactly one thing.
   useEffect(() => {
-    if (status !== 'checked') return
     const onKey = (e) => {
-      if (e.key !== 'Enter') return
+      if (e.key !== 'Enter' || e.isComposing) return
       // A focused button already fires its own click on Enter — don't double up.
       if (e.target instanceof HTMLButtonElement) return
       e.preventDefault()
-      advanceRef.current?.()
+      if (statusRef.current === 'answering') submitRef.current?.()
+      else advanceRef.current?.()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [status])
+  }, [])
 
   if (!current) return null
 
@@ -124,16 +128,8 @@ export default function QuizMode({
     setStatus('answering')
   }
 
+  submitRef.current = submit
   advanceRef.current = advance
-
-  // Enter submits the answer. The input is disabled once checked, so it can no
-  // longer receive keys — the window listener above handles advancing.
-  const onKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      submit()
-    }
-  }
 
   return (
     <div className="mx-auto max-w-xl space-y-5">
@@ -187,7 +183,6 @@ export default function QuizMode({
             placeholder="Type the English translation…"
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
-            onKeyDown={onKeyDown}
             disabled={status === 'checked'}
             autoComplete="off"
             autoCapitalize="off"

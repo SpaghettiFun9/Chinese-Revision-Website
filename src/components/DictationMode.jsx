@@ -44,6 +44,8 @@ export default function DictationMode({
   const voiceRef = useRef(null)
   const resultsRef = useRef([...initialResults])
   const decisionRef = useRef(null) // resolve fn for the "did you get it right?" wait
+  const awaitingRef = useRef(false) // synchronous mirror of `awaitingGrade`
+  const gradeRef = useRef(null)
 
   // Load voices up front so the first word speaks immediately.
   useEffect(() => {
@@ -160,8 +162,10 @@ export default function DictationMode({
       resultsRef.current.push({ word, correct: null })
       setReveal(true)
       setPhase('reveal')
+      awaitingRef.current = true
       setAwaitingGrade(true)
       await waitForDecision()
+      awaitingRef.current = false
       setAwaitingGrade(false)
       if (tokenRef.current !== token) return
 
@@ -219,6 +223,7 @@ export default function DictationMode({
       stopSpeaking()
     }
     // If we're sitting on the self-check, release it (leaving it ungraded).
+    awaitingRef.current = false
     settleDecision()
   }
 
@@ -228,6 +233,8 @@ export default function DictationMode({
   }
 
   const grade = (correct) => {
+    if (!awaitingRef.current) return // already answered / not on the self-check
+    awaitingRef.current = false
     const last = resultsRef.current[resultsRef.current.length - 1]
     if (last && last.correct === null) {
       last.correct = correct
@@ -235,24 +242,36 @@ export default function DictationMode({
     }
     settleDecision() // release the reveal gate → advance
   }
+  gradeRef.current = grade
 
-  // Y / N answer the self-check without reaching for the mouse.
+  // Y / N answer the self-check without reaching for the mouse. Registered once
+  // (not keyed on `awaitingGrade`) and gated on a synchronous ref, so a listener
+  // can never be added mid-event and swallow the keypress that created it.
   useEffect(() => {
-    if (!awaitingGrade) return
     const onKey = (e) => {
+      if (!awaitingRef.current || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return
+      // Don't hijack typing — e.g. the voice picker's type-ahead search.
+      const t = e.target
+      if (
+        t instanceof HTMLInputElement ||
+        t instanceof HTMLTextAreaElement ||
+        t?.isContentEditable ||
+        t?.closest?.('[role="listbox"]')
+      ) {
+        return
+      }
       const k = e.key.toLowerCase()
       if (k === 'y') {
         e.preventDefault()
-        grade(true)
+        gradeRef.current?.(true)
       } else if (k === 'n') {
         e.preventDefault()
-        grade(false)
+        gradeRef.current?.(false)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [awaitingGrade])
+  }, [])
 
   const updateCfg = (changes) =>
     dispatch({ type: 'SET_DICTATION_SETTINGS', settings: changes })
