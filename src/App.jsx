@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useApp } from './context/AppContext.jsx'
 import { buildQueue } from './utils/srs.js'
+import { unpackProgress } from './utils/progress.js'
 import Dashboard from './components/Dashboard.jsx'
 import QuizMode from './components/QuizMode.jsx'
 import DictationMode from './components/DictationMode.jsx'
@@ -10,19 +11,31 @@ import { ToneLegend } from './components/ToneLegend.jsx'
 // View state machine: everything happens without a page reload.
 //  dashboard → quiz | dictation → summary → dashboard
 export default function App() {
-  const { state } = useApp()
+  const { state, dispatch } = useApp()
   const [view, setView] = useState('dashboard') // 'dashboard' | 'quiz' | 'dictation' | 'summary'
-  const [session, setSession] = useState(null)   // { mode, words }
+  const [session, setSession] = useState(null)   // { mode, words, index, results }
   const [summary, setSummary] = useState(null)    // { mode, results }
 
-  const startQuiz = (words) => {
-    setSession({ mode: 'quiz', words })
-    setView('quiz')
+  // Starting fresh discards any paused session for that mode.
+  const start = (mode, words) => {
+    dispatch({ type: 'CLEAR_PROGRESS', mode })
+    setSession({ mode, words, index: 0, results: [] })
+    setView(mode)
   }
-  const startDictation = (words) => {
-    setSession({ mode: 'dictation', words })
-    setView('dictation')
+  const startQuiz = (words) => start('quiz', words)
+  const startDictation = (words) => start('dictation', words)
+
+  // Pick a paused session back up exactly where it stopped.
+  const resume = (mode) => {
+    const restored = unpackProgress(state.progress?.[mode], state.words)
+    if (!restored) {
+      dispatch({ type: 'CLEAR_PROGRESS', mode })
+      return
+    }
+    setSession({ mode, ...restored })
+    setView(mode)
   }
+
   const finish = (result) => {
     setSummary(result)
     setView('summary')
@@ -32,10 +45,7 @@ export default function App() {
     setView('dashboard')
   }
   // Re-run a session using only the words just missed.
-  const retry = (mode, words) => {
-    setSession({ mode, words: buildQueue(words) })
-    setView(mode)
-  }
+  const retry = (mode, words) => start(mode, buildQueue(words))
 
   return (
     <div className="min-h-screen">
@@ -60,13 +70,29 @@ export default function App() {
         {/* key changes per view → the wrapper remounts and animates in */}
         <div key={view} className="animate-fade-in">
           {view === 'dashboard' && (
-            <Dashboard onStartQuiz={startQuiz} onStartDictation={startDictation} />
+            <Dashboard
+              onStartQuiz={startQuiz}
+              onStartDictation={startDictation}
+              onResume={resume}
+            />
           )}
           {view === 'quiz' && (
-            <QuizMode words={session.words} onFinish={finish} onExit={goHome} />
+            <QuizMode
+              words={session.words}
+              initialIndex={session.index}
+              initialResults={session.results}
+              onFinish={finish}
+              onExit={goHome}
+            />
           )}
           {view === 'dictation' && (
-            <DictationMode words={session.words} onFinish={finish} onExit={goHome} />
+            <DictationMode
+              words={session.words}
+              initialIndex={session.index}
+              initialResults={session.results}
+              onFinish={finish}
+              onExit={goHome}
+            />
           )}
           {view === 'summary' && (
             <Analytics summary={summary} onHome={goHome} onRetry={retry} />

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
 import { ToneText, TonePinyin } from './ToneText.jsx'
 import { isSpeechSupported, speak, getPreferredVoice } from '../utils/speech.js'
+import { packProgress } from '../utils/progress.js'
 
 // --- Answer matching -------------------------------------------------------
 function normalize(s) {
@@ -36,15 +37,26 @@ function checkAnswer(userAnswer, english) {
   return false
 }
 
-export default function QuizMode({ words, onFinish, onExit }) {
+export default function QuizMode({
+  words,
+  initialIndex = 0,
+  initialResults = [],
+  onFinish,
+  onExit,
+}) {
   const { state, dispatch } = useApp()
-  const [index, setIndex] = useState(0)
+  const [index, setIndex] = useState(initialIndex)
   const [answer, setAnswer] = useState('')
   const [status, setStatus] = useState('answering') // 'answering' | 'checked'
   const [lastCorrect, setLastCorrect] = useState(false)
-  const [results, setResults] = useState([])
+  const [results, setResults] = useState(initialResults)
   const [showHint, setShowHint] = useState(state.settings.showPinyinHint)
   const inputRef = useRef(null)
+  // Mirrors `status` synchronously so a double key-press can't submit or
+  // advance twice within the same tick (state updates are async).
+  const statusRef = useRef('answering')
+  // Lets the window key handler call the latest `advance` without TDZ issues.
+  const advanceRef = useRef(null)
 
   const current = words[index]
   const total = words.length
@@ -66,9 +78,26 @@ export default function QuizMode({ words, onFinish, onExit }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // Once an answer is checked the input is disabled, so Enter can't reach it.
+  // Listen on the window so Enter still advances (and finishes the last one).
+  useEffect(() => {
+    if (status !== 'checked') return
+    const onKey = (e) => {
+      if (e.key !== 'Enter') return
+      // A focused button already fires its own click on Enter — don't double up.
+      if (e.target instanceof HTMLButtonElement) return
+      e.preventDefault()
+      advanceRef.current?.()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [status])
+
   if (!current) return null
 
   const submit = () => {
+    if (statusRef.current !== 'answering') return
+    statusRef.current = 'checked'
     const correct = checkAnswer(answer, current.english)
     setLastCorrect(correct)
     setStatus('checked')
@@ -77,20 +106,32 @@ export default function QuizMode({ words, onFinish, onExit }) {
   }
 
   const advance = () => {
-    if (index + 1 >= total) {
+    if (statusRef.current !== 'checked') return
+    statusRef.current = 'answering'
+    const nextIndex = index + 1
+    if (nextIndex >= total) {
+      dispatch({ type: 'CLEAR_PROGRESS', mode: 'quiz' })
       onFinish({ mode: 'quiz', results: [...results] })
       return
     }
-    setIndex((i) => i + 1)
+    dispatch({
+      type: 'SAVE_PROGRESS',
+      mode: 'quiz',
+      progress: packProgress({ words, index: nextIndex, results }),
+    })
+    setIndex(nextIndex)
     setAnswer('')
     setStatus('answering')
   }
 
+  advanceRef.current = advance
+
+  // Enter submits the answer. The input is disabled once checked, so it can no
+  // longer receive keys — the window listener above handles advancing.
   const onKeyDown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault()
-      if (status === 'answering') submit()
-      else advance()
+      submit()
     }
   }
 
@@ -189,7 +230,7 @@ export default function QuizMode({ words, onFinish, onExit }) {
               Check <kbd className="ml-1 rounded bg-white/20 px-1 text-xs">Enter</kbd>
             </button>
           ) : (
-            <button className="btn-primary flex-1" onClick={advance} autoFocus>
+            <button className="btn-primary flex-1" onClick={advance}>
               {index + 1 >= total ? 'See results' : 'Next'}{' '}
               <kbd className="ml-1 rounded bg-white/20 px-1 text-xs">Enter</kbd>
             </button>

@@ -6,8 +6,9 @@ import VocabInput from './VocabInput.jsx'
 import WordList from './WordList.jsx'
 import Select from './ui/Select.jsx'
 import Segmented from './ui/Segmented.jsx'
+import { progressLabel } from '../utils/progress.js'
 
-export default function Dashboard({ onStartQuiz, onStartDictation }) {
+export default function Dashboard({ onStartQuiz, onStartDictation, onResume }) {
   const { state } = useApp()
   const [tab, setTab] = useState('study') // 'study' | 'manage'
 
@@ -23,7 +24,11 @@ export default function Dashboard({ onStartQuiz, onStartDictation }) {
       </div>
 
       {tab === 'study' ? (
-        <StudyLauncher onStartQuiz={onStartQuiz} onStartDictation={onStartDictation} />
+        <StudyLauncher
+          onStartQuiz={onStartQuiz}
+          onStartDictation={onStartDictation}
+          onResume={onResume}
+        />
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="space-y-6">
@@ -50,7 +55,7 @@ function TabButton({ active, onClick, children }) {
   )
 }
 
-function StudyLauncher({ onStartQuiz, onStartDictation }) {
+function StudyLauncher({ onStartQuiz, onStartDictation, onResume }) {
   const { state } = useApp()
   const [topicId, setTopicId] = useState('all')
   const [scope, setScope] = useState('all') // 'all' | 'mistakes'
@@ -67,6 +72,17 @@ function StudyLauncher({ onStartQuiz, onStartDictation }) {
   const selectedWords = effectiveScope === 'mistakes' ? mistakeWords : topicWords
 
   const canStart = selectedWords.length > 0
+
+  // Paused sessions (if any) — resolved against the current word list so a
+  // session whose words were all deleted simply doesn't offer a resume.
+  const quizResume = useMemo(
+    () => progressLabel(state.progress?.quiz, state.words),
+    [state.progress, state.words],
+  )
+  const dictationResume = useMemo(
+    () => progressLabel(state.progress?.dictation, state.words),
+    [state.progress, state.words],
+  )
 
   const launch = (mode) => {
     const queue = buildQueue(selectedWords)
@@ -146,6 +162,8 @@ function StudyLauncher({ onStartQuiz, onStartDictation }) {
           disabled={!canStart}
           onClick={() => launch('quiz')}
           cta="Start quiz"
+          resume={quizResume}
+          onResume={() => onResume('quiz')}
         />
         <ModeCard
           title="Dictation (Tīngxiě)"
@@ -155,13 +173,15 @@ function StudyLauncher({ onStartQuiz, onStartDictation }) {
           disabled={!canStart}
           onClick={() => launch('dictation')}
           cta="Start dictation"
+          resume={dictationResume}
+          onResume={() => onResume('dictation')}
         />
       </div>
     </div>
   )
 }
 
-function ModeCard({ title, zh, desc, accent, disabled, onClick, cta }) {
+function ModeCard({ title, zh, desc, accent, disabled, onClick, cta, resume, onResume }) {
   return (
     <div className="card hover-bob flex flex-col overflow-hidden">
       <div className={`bg-gradient-to-r ${accent} px-5 py-4`}>
@@ -170,9 +190,25 @@ function ModeCard({ title, zh, desc, accent, disabled, onClick, cta }) {
       </div>
       <div className="flex flex-1 flex-col justify-between gap-4 p-5">
         <p className="text-sm text-slate-600">{desc}</p>
-        <button className="btn-primary w-full" disabled={disabled} onClick={onClick}>
-          {cta}
-        </button>
+
+        {resume ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 ring-1 ring-slate-200">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" />
+              Paused at word {resume.done + 1} of {resume.total}
+            </div>
+            <button className="btn-primary w-full" onClick={onResume}>
+              Resume ({resume.done}/{resume.total} done)
+            </button>
+            <button className="btn-secondary w-full" disabled={disabled} onClick={onClick}>
+              Start over
+            </button>
+          </div>
+        ) : (
+          <button className="btn-primary w-full" disabled={disabled} onClick={onClick}>
+            {cta}
+          </button>
+        )}
       </div>
     </div>
   )

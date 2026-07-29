@@ -36,6 +36,9 @@ function seedState() {
       dictation: { interval: 8, repeats: 2, rate: 0.9, voiceURI: '' },
       showPinyinHint: false,
     },
+    // An unfinished session per mode, so it can be resumed later (even after a
+    // reload). Words are stored by id and re-resolved on resume.
+    progress: { quiz: null, dictation: null },
   }
 }
 
@@ -52,6 +55,7 @@ function init() {
       ...rest,
       dictation: { ...seed.dictation, ...(rest.dictation || {}) },
     }
+    saved.progress = { quiz: null, dictation: null, ...(saved.progress || {}) }
     return saved
   }
   return seedState()
@@ -132,6 +136,15 @@ function reducer(state, action) {
           w.id === action.id ? { ...w, srs: gradeSrs(w.srs, action.correct) } : w,
         ),
       }
+    // ---- Resumable sessions -----------------------------------------------
+    case 'SAVE_PROGRESS':
+      return {
+        ...state,
+        progress: { ...state.progress, [action.mode]: action.progress },
+      }
+    case 'CLEAR_PROGRESS':
+      return { ...state, progress: { ...state.progress, [action.mode]: null } }
+
     case 'CLEAR_REVIEW':
       return {
         ...state,

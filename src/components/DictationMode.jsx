@@ -4,6 +4,7 @@ import { ToneText, TonePinyin } from './ToneText.jsx'
 import { ProgressHeader } from './QuizMode.jsx'
 import Select from './ui/Select.jsx'
 import Segmented from './ui/Segmented.jsx'
+import { packProgress } from '../utils/progress.js'
 import {
   isSpeechSupported,
   ensureVoicesLoaded,
@@ -13,11 +14,17 @@ import {
   stopSpeaking,
 } from '../utils/speech.js'
 
-export default function DictationMode({ words, onFinish, onExit }) {
+export default function DictationMode({
+  words,
+  initialIndex = 0,
+  initialResults = [],
+  onFinish,
+  onExit,
+}) {
   const { state, dispatch } = useApp()
   const cfg = state.settings.dictation
 
-  const [index, setIndex] = useState(0)
+  const [index, setIndex] = useState(initialIndex)
   const [phase, setPhase] = useState('idle') // idle | speaking | writing | reveal | done
   const [repeatNum, setRepeatNum] = useState(0)
   const [countdown, setCountdown] = useState(0)
@@ -35,7 +42,7 @@ export default function DictationMode({ words, onFinish, onExit }) {
   const pausedRef = useRef(false)
   const skipRef = useRef(false)
   const voiceRef = useRef(null)
-  const resultsRef = useRef([])
+  const resultsRef = useRef([...initialResults])
   const decisionRef = useRef(null) // resolve fn for the "did you get it right?" wait
 
   // Load voices up front so the first word speaks immediately.
@@ -157,12 +164,26 @@ export default function DictationMode({ words, onFinish, onExit }) {
       await waitForDecision()
       setAwaitingGrade(false)
       if (tokenRef.current !== token) return
+
+      // Checkpoint after every word so the session can be resumed later.
+      if (i + 1 < words.length) {
+        dispatch({
+          type: 'SAVE_PROGRESS',
+          mode: 'dictation',
+          progress: packProgress({
+            words,
+            index: i + 1,
+            results: resultsRef.current,
+          }),
+        })
+      }
     }
 
     // Session complete.
     if (tokenRef.current === token) {
       setPhase('done')
       setIsPlaying(false)
+      dispatch({ type: 'CLEAR_PROGRESS', mode: 'dictation' })
       onFinish({ mode: 'dictation', results: [...resultsRef.current] })
     }
   }
@@ -170,8 +191,8 @@ export default function DictationMode({ words, onFinish, onExit }) {
   // --- Controls ------------------------------------------------------------
   const handlePlay = () => {
     if (phase === 'idle' || phase === 'done') {
-      resultsRef.current = []
-      run(0)
+      // Continue from wherever this session was restored to (0 when new).
+      run(index)
     } else if (isPaused) {
       pausedRef.current = false
       setIsPaused(false)
@@ -349,7 +370,15 @@ export default function DictationMode({ words, onFinish, onExit }) {
         <div className="grid min-h-[9rem] place-items-center">
           {phase === 'idle' && (
             <p className="text-slate-500">
-              Press <b>Play</b>. Listen, then write each character on paper.
+              {index > 0 ? (
+                <>
+                  Resuming at word <b>{index + 1}</b> of {words.length}. Press <b>Play</b>.
+                </>
+              ) : (
+                <>
+                  Press <b>Play</b>. Listen, then write each character on paper.
+                </>
+              )}
             </p>
           )}
 

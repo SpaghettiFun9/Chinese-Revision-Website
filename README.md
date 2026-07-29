@@ -61,6 +61,9 @@ npm run preview
   diacritic (`hǎo`) and numbered (`hao3`) pinyin.
 - **SRS Lite** — words you miss gain weight and resurface more often; correct answers
   fade them out. A weighted queue is built for every session.
+- **Resumable sessions** — leaving a quiz or dictation part-way (or closing the tab)
+  keeps your place. The dashboard card then offers **Resume** alongside **Start over**;
+  answers already given are carried into the final summary.
 - **Mistake tracking** — any word you get wrong (quiz or dictation) is flagged and
   persists until you answer it correctly. Study just those via **✗ My mistakes** on
   the dashboard, browse them with the **Needs review** filter in the word list, retry
